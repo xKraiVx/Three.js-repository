@@ -1,0 +1,19 @@
+.text-and-image{
+    display: flex;
+    justify-content: space-between;
+    margin: 40px 0;
+    &__wrapper{
+        width: calc(50%  - 10px);
+        text-align: left;
+    }
+    &__image{
+        width: calc(50%  - 10px);
+        transition: all .3s ease;
+        &:hover{
+            transform: scale(1.2);
+        }
+        img{
+            width: 100%;
+        }
+    }
+}

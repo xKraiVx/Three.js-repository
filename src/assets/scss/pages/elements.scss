@@ -1,0 +1,9 @@
+.elements {
+  position: relative;
+  height: calc(100vh - 84px);
+  canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+}

@@ -1,0 +1,40 @@
+.navigation {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 30px 10px;
+  background: $secondary;
+  z-index: 1;
+  &__wrapper{
+    position: relative;
+  }
+  &__list{
+    &-item{
+      margin: 20px 0;
+    }
+  }
+  .arrow{
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    &--prev{
+      top: 10px;
+    }
+    &--next{
+      bottom: 10px;
+    }
+  }
+  a {
+    margin: 0 10px;
+    font-weight: bold;
+    color: $primary;
+    transition: opacity .3s ease;
+    &.router-link-exact-active, &:hover {
+      opacity: .8;
+    }
+  }
+}
+

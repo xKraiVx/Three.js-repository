@@ -1,0 +1,16 @@
+a {
+  font-weight: bold;
+  color: $third;
+  transition: color .3s ease;
+  text-decoration: none;
+  &:hover{
+    color: $primary;
+  }
+  &.router-link-exact-active {
+    color: $primary;
+  }
+}
+
+h1,h2,h3,h4,h5,h6,p{
+  padding: 1rem 0;
+}
