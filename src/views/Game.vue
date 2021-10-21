@@ -1,6 +1,7 @@
 /* eslint-disable */
 <template>
   <div ref="wrapper" class="game">
+    <div class="distance">{{ distanceCounter }}</div>
     <canvas ref="canvas"></canvas>
   </div>
 </template>
@@ -10,8 +11,11 @@ import * as CANNON from "cannon-es";
 
 export default {
   data: () => ({
+    state: "beforeInit",
     scene: null,
     world: null,
+    gravity: 0,
+    velocity: 0,
     wrapperSizes: {
       width: 0,
       height: 0,
@@ -20,7 +24,7 @@ export default {
     camera: null,
     cameraPosition: {
       x: -2,
-      y: 7,
+      y: 6,
       z: 10,
     },
     renderer: null,
@@ -28,6 +32,7 @@ export default {
       mesh: null,
       body: null,
       parametrs: {
+        positionY: 5,
         size: {
           width: 1,
           height: 0.5,
@@ -40,14 +45,43 @@ export default {
     floor: {
       mesh: null,
       body: null,
-      size: {
-        width: 3,
-        leng: 100,
+      parametrs: {
+        size: {
+          width: 3,
+          leng: 100,
+        },
+      }
+    },
+    windmillOffice: {
+      mesh: null,
+      raycaster: null,
+      parametrs: {
+        size: {
+          width: 12,
+          height: 10,
+          depth: 10,
+        },
+        metalness: 0.4,
+        roughness: 0.4,
+      },
+    },
+    customersOffice: {
+      mesh: null,
+      raycaster: null,
+      parametrs: {
+        size: {
+          width: 12,
+          height: 10,
+          depth: 10,
+        },
+        metalness: 0.4,
+        roughness: 0.4,
       },
     },
     objectsToUpdate: [],
     clock: 0,
     oldElapsedTime: 0,
+    distance: 0,
   }),
   mounted() {
     /**
@@ -63,29 +97,19 @@ export default {
     const scene = new THREE.Scene();
     this.scene = scene;
 
-    /**
-     * Camera
-     */
-
     this.createCamera();
 
-    /**
-     * Textures
-     */
-
-    /**
-     * Light
-     */
     this.createLight();
 
-    // World
     this.createWorld();
 
-    //Floor
     this.createFloor();
 
-    //Quadcopter
     this.createQuadrocopter();
+
+    this.createWindmillOffice();
+
+    this.createCustomersOffice();
 
     //save to objects to update
 
@@ -108,6 +132,27 @@ export default {
       const deltaTime = elapsedTime - this.oldElapsedTime;
       this.oldElapsedTime = elapsedTime;
 
+      //Raycaster
+      const rayOrigin = new THREE.Vector3(
+        this.windmillOffice.parametrs.size.width / 2 + 1,
+        this.quadcopter.parametrs.positionY,
+        0
+      );
+      const rayDiraction = new THREE.Vector3(1, 1, 0);
+      rayDiraction.normalize();
+
+      this.windmillOffice.raycaster.set(rayOrigin, rayDiraction);
+
+      const intersect = this.windmillOffice.raycaster.intersectObject(
+        this.quadcopter.mesh
+      );
+
+      if (intersect.length) {
+        this.gravity = -9.82;
+        this.world.gravity.set(0, this.gravity, 0);
+        this.state = "start";
+      }
+
       //Update physics world
 
       this.world.step(1 / 60, deltaTime, 3);
@@ -118,11 +163,10 @@ export default {
 
       //Moving of quadcopter
       this.quadcopter.body.applyLocalForce(
-        new CANNON.Vec3(2, 0, 0),
+        new CANNON.Vec3(this.velocity, 0, 0),
         new CANNON.Vec3(0, 0, 0)
       );
       this.camera.position.x = this.quadcopter.body.position.x;
-
       // Render
       this.renderer.render(scene, this.camera);
 
@@ -135,13 +179,26 @@ export default {
     window.removeEventListener("resize", this.resizeUpdate);
     document.removeEventListener("keypress", this.handleKeypress);
   },
+  computed: {
+    distanceCounter() {
+      if (!this.camera) {
+        return 0;
+      }
+      return this.camera.position.x.toFixed();
+    },
+  },
   methods: {
     handleKeypress(e) {
       if (e.code === "Space") {
-        this.quadcopter.body.applyLocalImpulse(
-          new CANNON.Vec3(0, 5, 0),
-          new CANNON.Vec3(0, 0, 0)
-        );
+        if (this.state === "beforeInit") {
+          this.velocity = 1;
+          this.state = "init";
+        } else if (this.state === "start") {
+          this.quadcopter.body.applyLocalImpulse(
+            new CANNON.Vec3(0, 5, 0),
+            new CANNON.Vec3(0, 0, 0)
+          );
+        }
       }
     },
     createCamera() {
@@ -175,7 +232,7 @@ export default {
     },
     createWorld() {
       this.world = new CANNON.World();
-      this.world.gravity.set(0, -9.82, 0);
+      this.world.gravity.set(0, this.gravity, 0);
       this.world.broadphase = new CANNON.SAPBroadphase(this.world);
       this.world.allowSleep = true;
 
@@ -196,8 +253,8 @@ export default {
     createFloor() {
       //Mesh
       const floorGeometry = new THREE.PlaneBufferGeometry(
-        this.floor.size.leng,
-        this.floor.size.width
+        this.floor.parametrs.size.leng,
+        this.floor.parametrs.size.width
       );
       const floorMaterial = new THREE.MeshStandardMaterial({
         color: "#777777",
@@ -205,6 +262,7 @@ export default {
         roughness: this.quadcopter.parametrs.roughness,
       });
       this.floor.mesh = new THREE.Mesh(floorGeometry, floorMaterial);
+      this.floor.mesh.position.x = this.floor.parametrs.size.leng / 2;
       this.floor.mesh.rotation.x = -Math.PI / 2;
       this.scene.add(this.floor.mesh);
 
@@ -233,7 +291,7 @@ export default {
       });
 
       this.quadcopter.mesh = new THREE.Mesh(geometry, material);
-      this.quadcopter.mesh.position.y = 5;
+      this.quadcopter.mesh.position.y = this.quadcopter.parametrs.positionY;
       this.scene.add(this.quadcopter.mesh);
 
       //Body
@@ -260,6 +318,45 @@ export default {
         mesh: quadcopterMesh,
         body: quadcopterBody,
       });
+    },
+    createWindmillOffice() {
+      const width = this.windmillOffice.parametrs.size.width,
+        height = this.windmillOffice.parametrs.size.height,
+        depth = this.windmillOffice.parametrs.size.depth;
+
+      //Mesh
+      const geometry = new THREE.BoxBufferGeometry(width, height, depth);
+      const material = new THREE.MeshStandardMaterial({
+        color: "#777777",
+        metalness: this.windmillOffice.parametrs.metalness,
+        roughness: this.windmillOffice.parametrs.roughness,
+      });
+
+      this.windmillOffice.mesh = new THREE.Mesh(geometry, material);
+      this.windmillOffice.mesh.position.y = height / 2;
+      this.scene.add(this.windmillOffice.mesh);
+
+      //Raycaster
+      this.windmillOffice.raycaster = new THREE.Raycaster();
+    },
+    createCustomersOffice() {
+      const width = this.customersOffice.parametrs.size.width,
+        height = this.customersOffice.parametrs.size.height,
+        depth = this.customersOffice.parametrs.size.depth,
+        endOfWay = this.floor.parametrs.size.leng;
+
+      //Mesh
+      const geometry = new THREE.BoxBufferGeometry(width, height, depth);
+      const material = new THREE.MeshStandardMaterial({
+        color: "#777777",
+        metalness: this.customersOffice.parametrs.metalness,
+        roughness: this.customersOffice.parametrs.roughness,
+      });
+
+      this.customersOffice.mesh = new THREE.Mesh(geometry, material);
+      this.customersOffice.mesh.position.y = height / 2;
+      this.customersOffice.mesh.position.x = endOfWay;
+      this.scene.add(this.customersOffice.mesh);
     },
     resizeUpdate() {
       if (!this.camera || !this.renderer) {
