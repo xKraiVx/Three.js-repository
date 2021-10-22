@@ -1,0 +1,24 @@
+.popup{
+    position: fixed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    top: 0; 
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba($black, .9);
+    &__content{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        width: 50vmin;
+        height: 50vmin;
+        min-height: 200px;
+        min-width: 200px;
+        background: $third;
+        border-radius: 20px;
+    }
+}

@@ -1,16 +1,28 @@
 /* eslint-disable */
 <template>
   <div ref="wrapper" class="game">
+    <transition name="fade">
+      <popup v-if="popup.state" :content="popup.content" />
+    </transition>
     <div class="distance">{{ distanceCounter }}</div>
     <canvas ref="canvas"></canvas>
   </div>
 </template>
 <script>
 import * as THREE from "three";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import * as CANNON from "cannon-es";
+import Popup from "../components/Popup.vue";
+import dataJSON from "../data/data.json";
 
 export default {
   data: () => ({
+    data: dataJSON,
+    popup: {
+      state: false,
+      content: null,
+      timeout: 3000,
+    },
     state: "beforeInit",
     scene: null,
     world: null,
@@ -29,6 +41,7 @@ export default {
     },
     renderer: null,
     quadcopter: {
+      model: null,
       mesh: null,
       body: null,
       parametrs: {
@@ -50,7 +63,7 @@ export default {
           width: 3,
           leng: 100,
         },
-      }
+      },
     },
     windmillOffice: {
       mesh: null,
@@ -82,7 +95,25 @@ export default {
     clock: 0,
     oldElapsedTime: 0,
     distance: 0,
+    objLoader: null,
   }),
+  created() {
+    this.data = dataJSON;
+    //Popup
+    this.popup.content = this.data.popups.start;
+    this.popup.state = true;
+
+    //Model
+    this.objLoader = new OBJLoader();
+
+    this.objLoader.load(
+      `/assets/dron/dron_1/Drone_obj.obj`,
+      (loadedObject) => {
+       console.log(loadedObject);
+        this.scene.add(loadedObject);
+      }
+    );
+  },
   mounted() {
     /**
      * Base
@@ -133,24 +164,32 @@ export default {
       this.oldElapsedTime = elapsedTime;
 
       //Raycaster
-      const rayOrigin = new THREE.Vector3(
-        this.windmillOffice.parametrs.size.width / 2 + 1,
-        this.quadcopter.parametrs.positionY,
-        0
-      );
-      const rayDiraction = new THREE.Vector3(1, 1, 0);
-      rayDiraction.normalize();
 
-      this.windmillOffice.raycaster.set(rayOrigin, rayDiraction);
+      //start
 
-      const intersect = this.windmillOffice.raycaster.intersectObject(
+      const intersectStart = this.windmillOffice.raycaster.intersectObject(
         this.quadcopter.mesh
       );
 
-      if (intersect.length) {
+      if (intersectStart.length) {
         this.gravity = -9.82;
         this.world.gravity.set(0, this.gravity, 0);
         this.state = "start";
+      }
+
+      //finish
+      const intersectFinish = this.customersOffice.raycaster.intersectObject(
+        this.quadcopter.mesh
+      );
+
+      if (intersectFinish.length) {
+        document.removeEventListener("keypress", this.handleKeypress);
+        this.state = "finish";
+        setTimeout(() => {
+          document.addEventListener("keypress", this.handleKeypress);
+          this.popup.content = this.data.popups.finish;
+          this.popup.state = true;
+        }, this.popup.timeout);
       }
 
       //Update physics world
@@ -166,7 +205,9 @@ export default {
         new CANNON.Vec3(this.velocity, 0, 0),
         new CANNON.Vec3(0, 0, 0)
       );
-      this.camera.position.x = this.quadcopter.body.position.x;
+      if (this.state !== "finish") {
+        this.camera.position.x = this.quadcopter.body.position.x;
+      }
       // Render
       this.renderer.render(scene, this.camera);
 
@@ -190,6 +231,9 @@ export default {
   methods: {
     handleKeypress(e) {
       if (e.code === "Space") {
+        if (this.popup.state) {
+          this.popup.state = false;
+        }
         if (this.state === "beforeInit") {
           this.velocity = 1;
           this.state = "init";
@@ -278,6 +322,7 @@ export default {
       this.world.addBody(this.floor.body);
     },
     createQuadrocopter() {
+      console.log(this.quadcopter.model);
       //Mesh
       const geometry = new THREE.BoxBufferGeometry(
         this.quadcopter.parametrs.size.width,
@@ -334,10 +379,19 @@ export default {
 
       this.windmillOffice.mesh = new THREE.Mesh(geometry, material);
       this.windmillOffice.mesh.position.y = height / 2;
-      this.scene.add(this.windmillOffice.mesh);
+      /* this.scene.add(this.windmillOffice.mesh); */
 
       //Raycaster
       this.windmillOffice.raycaster = new THREE.Raycaster();
+      const rayOrigin = new THREE.Vector3(
+        this.windmillOffice.parametrs.size.width / 2 + 1,
+        this.quadcopter.parametrs.positionY,
+        0
+      );
+      const rayDiraction = new THREE.Vector3(1, 1, 0);
+      rayDiraction.normalize();
+
+      this.windmillOffice.raycaster.set(rayOrigin, rayDiraction);
     },
     createCustomersOffice() {
       const width = this.customersOffice.parametrs.size.width,
@@ -357,6 +411,18 @@ export default {
       this.customersOffice.mesh.position.y = height / 2;
       this.customersOffice.mesh.position.x = endOfWay;
       this.scene.add(this.customersOffice.mesh);
+
+      //Raycaster
+      this.customersOffice.raycaster = new THREE.Raycaster();
+      const rayOrigin = new THREE.Vector3(
+        endOfWay,
+        this.quadcopter.parametrs.positionY,
+        0
+      );
+      const rayDiraction = new THREE.Vector3(1, 1, 0);
+      rayDiraction.normalize();
+
+      this.customersOffice.raycaster.set(rayOrigin, rayDiraction);
     },
     resizeUpdate() {
       if (!this.camera || !this.renderer) {
@@ -377,6 +443,9 @@ export default {
       this.renderer.setSize(width, height);
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     },
+  },
+  components: {
+    Popup,
   },
 };
 </script>
