@@ -10,7 +10,6 @@
 </template>
 <script>
 import * as THREE from "three";
-import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import * as CANNON from "cannon-es";
 import Popup from "../components/Popup.vue";
 import dataJSON from "../data/data.json";
@@ -37,7 +36,7 @@ export default {
     cameraPosition: {
       x: -2,
       y: 6,
-      z: 10,
+      z: 20,
     },
     renderer: null,
     quadcopter: {
@@ -60,10 +59,15 @@ export default {
       body: null,
       parametrs: {
         size: {
-          width: 3,
-          leng: 100,
+          width: 10,
+          leng: 1000,
+          height: 10,
         },
       },
+    },
+    ceiling: {
+      mesh: null,
+      body: null,
     },
     windmillOffice: {
       mesh: null,
@@ -91,6 +95,18 @@ export default {
         roughness: 0.4,
       },
     },
+    walls: {
+      objects: [],
+      parametrs: {
+        size: {
+          x: 1,
+          y: 5,
+          z: 10,
+        },
+        metalness: 0.4,
+        roughness: 0.4,
+      },
+    },
     objectsToUpdate: [],
     clock: 0,
     oldElapsedTime: 0,
@@ -102,17 +118,6 @@ export default {
     //Popup
     this.popup.content = this.data.popups.start;
     this.popup.state = true;
-
-    //Model
-    this.objLoader = new OBJLoader();
-
-    this.objLoader.load(
-      `/assets/dron/dron_1/Drone_obj.obj`,
-      (loadedObject) => {
-       console.log(loadedObject);
-        this.scene.add(loadedObject);
-      }
-    );
   },
   mounted() {
     /**
@@ -134,13 +139,23 @@ export default {
 
     this.createWorld();
 
-    this.createFloor();
+    this.createFloor(this.floor.parametrs.size);
 
-    this.createQuadrocopter();
+    this.createCeiling(this.floor.parametrs.size);
+
+    this.createQuadrocopter(
+      this.quadcopter.parametrs.size,
+      this.quadcopter.parametrs.positionY
+    );
 
     this.createWindmillOffice();
 
     this.createCustomersOffice();
+
+    this.createWall(
+      this.walls.parametrs.size,
+      new THREE.Vector3(20, this.walls.parametrs.size.y / 2, 0)
+    );
 
     //save to objects to update
 
@@ -294,11 +309,43 @@ export default {
       this.world.addContactMaterial(defaultContactMaterial);
       this.world.defaultContactMaterial = defaultContactMaterial;
     },
-    createFloor() {
+    createCeiling(size) {
       //Mesh
-      const floorGeometry = new THREE.PlaneBufferGeometry(
-        this.floor.parametrs.size.leng,
-        this.floor.parametrs.size.width
+      const ceilingGeometry = new THREE.BoxBufferGeometry(
+        size.leng + 100,
+        size.width,
+        size.height
+      );
+      const ceilingMaterial = new THREE.MeshStandardMaterial({
+        color: "#777777",
+        metalness: this.quadcopter.parametrs.metalness,
+        roughness: this.quadcopter.parametrs.roughness,
+      });
+      this.ceiling.mesh = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+      this.ceiling.mesh.position.x = size.leng / 2;
+      this.ceiling.mesh.position.y = size.height * 1.5;
+      this.ceiling.mesh.rotation.x = -Math.PI / 2;
+      this.scene.add(this.ceiling.mesh);
+
+      //Body
+      const ceilingShape = new CANNON.Plane();
+      this.ceiling.body = new CANNON.Body();
+      this.ceiling.body.mass = 0;
+      this.ceiling.body.addShape(ceilingShape);
+      this.ceiling.body.quaternion.setFromAxisAngle(
+        new CANNON.Vec3(-1, 0, 0),
+        -Math.PI * 0.5
+      );
+      this.ceiling.body.position.y = size.height;
+      console.log(this.ceiling.body.position);
+      this.world.addBody(this.ceiling.body);
+    },
+    createFloor(size) {
+      //Mesh
+      const floorGeometry = new THREE.BoxBufferGeometry(
+        size.leng + 100,
+        size.width,
+        size.height
       );
       const floorMaterial = new THREE.MeshStandardMaterial({
         color: "#777777",
@@ -306,7 +353,8 @@ export default {
         roughness: this.quadcopter.parametrs.roughness,
       });
       this.floor.mesh = new THREE.Mesh(floorGeometry, floorMaterial);
-      this.floor.mesh.position.x = this.floor.parametrs.size.leng / 2;
+      this.floor.mesh.position.x = size.leng / 2;
+      this.floor.mesh.position.y = -size.height / 2;
       this.floor.mesh.rotation.x = -Math.PI / 2;
       this.scene.add(this.floor.mesh);
 
@@ -321,13 +369,12 @@ export default {
       );
       this.world.addBody(this.floor.body);
     },
-    createQuadrocopter() {
-      console.log(this.quadcopter.model);
+    createQuadrocopter(size, positionY) {
       //Mesh
       const geometry = new THREE.BoxBufferGeometry(
-        this.quadcopter.parametrs.size.width,
-        this.quadcopter.parametrs.size.height,
-        this.quadcopter.parametrs.size.depth
+        size.width,
+        size.height,
+        size.depth
       );
       const material = new THREE.MeshStandardMaterial({
         color: "#777777",
@@ -336,16 +383,12 @@ export default {
       });
 
       this.quadcopter.mesh = new THREE.Mesh(geometry, material);
-      this.quadcopter.mesh.position.y = this.quadcopter.parametrs.positionY;
+      this.quadcopter.mesh.position.y = positionY;
       this.scene.add(this.quadcopter.mesh);
 
       //Body
       const shapeQuadcopter = new CANNON.Box(
-        new CANNON.Vec3(
-          this.quadcopter.parametrs.size.width,
-          this.quadcopter.parametrs.size.height,
-          this.quadcopter.parametrs.size.depth
-        )
+        new CANNON.Vec3(size.width / 2, size.height / 2, size.depth / 2)
       );
       this.quadcopter.body = new CANNON.Body({
         mass: 1,
@@ -365,7 +408,7 @@ export default {
       });
     },
     createWindmillOffice() {
-      const width = this.windmillOffice.parametrs.size.width,
+      const width = this.windmillOffice.parametrs.size.width + 30,
         height = this.windmillOffice.parametrs.size.height,
         depth = this.windmillOffice.parametrs.size.depth;
 
@@ -379,7 +422,8 @@ export default {
 
       this.windmillOffice.mesh = new THREE.Mesh(geometry, material);
       this.windmillOffice.mesh.position.y = height / 2;
-      /* this.scene.add(this.windmillOffice.mesh); */
+      this.windmillOffice.mesh.position.x = -15;
+      this.scene.add(this.windmillOffice.mesh);
 
       //Raycaster
       this.windmillOffice.raycaster = new THREE.Raycaster();
@@ -394,7 +438,7 @@ export default {
       this.windmillOffice.raycaster.set(rayOrigin, rayDiraction);
     },
     createCustomersOffice() {
-      const width = this.customersOffice.parametrs.size.width,
+      const width = this.customersOffice.parametrs.size.width + 30,
         height = this.customersOffice.parametrs.size.height,
         depth = this.customersOffice.parametrs.size.depth,
         endOfWay = this.floor.parametrs.size.leng;
@@ -409,7 +453,7 @@ export default {
 
       this.customersOffice.mesh = new THREE.Mesh(geometry, material);
       this.customersOffice.mesh.position.y = height / 2;
-      this.customersOffice.mesh.position.x = endOfWay;
+      this.customersOffice.mesh.position.x = endOfWay + 15;
       this.scene.add(this.customersOffice.mesh);
 
       //Raycaster
@@ -423,6 +467,32 @@ export default {
       rayDiraction.normalize();
 
       this.customersOffice.raycaster.set(rayOrigin, rayDiraction);
+    },
+    createWall(size, position) {
+      //Mesh
+      const geometry = new THREE.BoxBufferGeometry(size.x, size.y, size.z);
+      const material = new THREE.MeshStandardMaterial({
+        color: "#777777",
+        metalness: this.walls.parametrs.metalness,
+        roughness: this.walls.parametrs.roughness,
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.copy(position);
+      this.scene.add(mesh);
+
+      //Body
+      const shapeWalls = new CANNON.Box(
+        new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2)
+      );
+      const body = new CANNON.Body({
+        mass: 0,
+        position: new CANNON.Vec3(0, 0, 0),
+        shape: shapeWalls,
+        material: this.defaultMaterial,
+      });
+      body.position.copy(position);
+      this.world.addBody(body);
+      this.walls.objects.push({ mesh, body });
     },
     resizeUpdate() {
       if (!this.camera || !this.renderer) {
