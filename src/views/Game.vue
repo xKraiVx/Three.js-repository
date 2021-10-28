@@ -106,12 +106,19 @@ export default {
         metalness: 0.4,
         roughness: 0.4,
       },
+      optimization: {
+        wallsDistance: 200,
+        step: 20,
+      },
     },
     objectsToUpdate: [],
     clock: 0,
     oldElapsedTime: 0,
     distance: 0,
     objLoader: null,
+    speedCount: {
+      oldTime: 0
+    }
   }),
   created() {
     this.data = dataJSON;
@@ -152,11 +159,6 @@ export default {
 
     this.createCustomersOffice();
 
-    this.createWall(
-      this.walls.parametrs.size,
-      new THREE.Vector3(20, this.walls.parametrs.size.y / 2, 0)
-    );
-
     //save to objects to update
 
     /* Renderer */
@@ -172,6 +174,11 @@ export default {
     document.addEventListener("keypress", this.handleKeypress);
 
     this.clock = new THREE.Clock();
+
+    this.createWallStack(
+      this.walls.optimization.step,
+      this.walls.optimization.wallsDistance
+    );
 
     const tick = () => {
       const elapsedTime = this.clock.getElapsedTime();
@@ -241,6 +248,19 @@ export default {
         return 0;
       }
       return this.camera.position.x.toFixed();
+    },
+  },
+  watch: {
+    distanceCounter: function () {
+      let wallsDistance = this.walls.optimization.wallsDistance,
+        currentDistance = Number(this.distanceCounter);
+      if (currentDistance + 150 === wallsDistance) {
+        let start =
+          Math.round(this.walls.objects[this.walls.objects.length - 1].mesh.position.x) + 15;
+        wallsDistance += 200;
+        this.createWallStack(start, wallsDistance);
+        this.walls.optimization.wallsDistance = wallsDistance;
+      }
     },
   },
   methods: {
@@ -337,7 +357,6 @@ export default {
         -Math.PI * 0.5
       );
       this.ceiling.body.position.y = size.height;
-      console.log(this.ceiling.body.position);
       this.world.addBody(this.ceiling.body);
     },
     createFloor(size) {
@@ -493,6 +512,27 @@ export default {
       body.position.copy(position);
       this.world.addBody(body);
       this.walls.objects.push({ mesh, body });
+    },
+    createWallStack(start, end) {
+      console.log(start, end);
+      let pathLength = start;
+      while (pathLength < end) {
+        const step = Math.random() * 10 + 10,
+          heightOfBottomWall = this.walls.parametrs.size.y * Math.random(),
+          offset = 5,
+          heightOfTopWall = 10 - (offset + heightOfBottomWall);
+
+        this.createWall(
+          this.walls.parametrs.size,
+          new THREE.Vector3(pathLength, heightOfBottomWall / 2, 0)
+        );
+
+        this.createWall(
+          this.walls.parametrs.size,
+          new THREE.Vector3(pathLength, -heightOfTopWall / 2 + 10, 0)
+        );
+        pathLength += step;
+      }
     },
     resizeUpdate() {
       if (!this.camera || !this.renderer) {
