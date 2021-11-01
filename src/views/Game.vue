@@ -5,6 +5,7 @@
       <popup v-if="popup.state" :content="popup.content" />
     </transition>
     <div class="distance">{{ distanceCounter }}</div>
+    <div class="speed">{{ speedCount.speed }}</div>
     <canvas ref="canvas"></canvas>
   </div>
 </template>
@@ -114,13 +115,18 @@ export default {
     objectsToUpdate: [],
     clock: 0,
     oldElapsedTime: 0,
-    distance: 0,
     objLoader: null,
     speedCount: {
-      oldTime: 0
-    }
+      maxSpeed: 10,
+      speed: 0,
+      speedInterval: null,
+      oldTime: 0,
+      oldDistance: 0,
+    },
   }),
   created() {
+    this.oldTime = Date.now();
+
     this.data = dataJSON;
     //Popup
     this.popup.content = this.data.popups.start;
@@ -180,6 +186,8 @@ export default {
       this.walls.optimization.wallsDistance
     );
 
+    this.speedCounter();
+
     const tick = () => {
       const elapsedTime = this.clock.getElapsedTime();
       const deltaTime = elapsedTime - this.oldElapsedTime;
@@ -223,10 +231,15 @@ export default {
       }
 
       //Moving of quadcopter
+      let currForse = this.velocity;
+      if (this.speedCount.maxSpeed <= this.speedCount.speed) {
+        currForse = 0;
+      }
       this.quadcopter.body.applyLocalForce(
-        new CANNON.Vec3(this.velocity, 0, 0),
+        new CANNON.Vec3(currForse, 0, 0),
         new CANNON.Vec3(0, 0, 0)
       );
+
       if (this.state !== "finish") {
         this.camera.position.x = this.quadcopter.body.position.x;
       }
@@ -256,7 +269,9 @@ export default {
         currentDistance = Number(this.distanceCounter);
       if (currentDistance + 150 === wallsDistance) {
         let start =
-          Math.round(this.walls.objects[this.walls.objects.length - 1].mesh.position.x) + 15;
+          Math.round(
+            this.walls.objects[this.walls.objects.length - 1].mesh.position.x
+          ) + 15;
         wallsDistance += 200;
         this.createWallStack(start, wallsDistance);
         this.walls.optimization.wallsDistance = wallsDistance;
@@ -519,7 +534,7 @@ export default {
       while (pathLength < end) {
         const step = Math.random() * 10 + 10,
           heightOfBottomWall = this.walls.parametrs.size.y * Math.random(),
-          offset = 5,
+          offset = 7,
           heightOfTopWall = 10 - (offset + heightOfBottomWall);
 
         this.createWall(
@@ -552,6 +567,13 @@ export default {
       // Update renderer
       this.renderer.setSize(width, height);
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    },
+    speedCounter() {
+      this.speedCount.speedInterval = setInterval(() => {
+        const currDistance = this.camera.position.x.toFixed();
+        this.speedCount.speed = currDistance - this.speedCount.oldDistance;
+        this.speedCount.oldDistance = currDistance;
+      }, 1000);
     },
   },
   components: {
