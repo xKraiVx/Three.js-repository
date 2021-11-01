@@ -265,16 +265,29 @@ export default {
   },
   watch: {
     distanceCounter: function () {
-      let wallsDistance = this.walls.optimization.wallsDistance,
+      if (!this.walls.objects) {
+        return;
+      }
+
+      const lastObjectX =
+          this.walls.objects[this.walls.objects.length - 1].mesh.position.x,
         currentDistance = Number(this.distanceCounter);
-      if (currentDistance + 150 === wallsDistance) {
-        let start =
-          Math.round(
-            this.walls.objects[this.walls.objects.length - 1].mesh.position.x
-          ) + 15;
-        wallsDistance += 200;
-        this.createWallStack(start, wallsDistance);
-        this.walls.optimization.wallsDistance = wallsDistance;
+
+      if (currentDistance + 30 > lastObjectX) {
+        const /* heightOfBottomWall = this.walls.parametrs.size.y * Math.random(),
+          offset = 7,
+          heightOfTopWall = 10 - (offset + heightOfBottomWall), */
+          positionX = Math.round(lastObjectX) + 15;
+
+        const updateObjects = this.walls.objects.splice(0, 2);
+
+        updateObjects.forEach((object) => {
+          object.mesh.position.x = positionX;
+          object.body.position.x = positionX;
+          this.walls.objects.push(object);
+        });
+
+        console.log(this.walls.objects.length);
       }
     },
   },
@@ -528,8 +541,11 @@ export default {
       this.world.addBody(body);
       this.walls.objects.push({ mesh, body });
     },
+    removePhysicalObject(mesh, body) {
+      this.world.removeBody(body);
+      this.scene.remove(mesh);
+    },
     createWallStack(start, end) {
-      console.log(start, end);
       let pathLength = start;
       while (pathLength < end) {
         const step = Math.random() * 10 + 10,
