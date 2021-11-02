@@ -1,22 +1,16 @@
 <template>
-  <main>
-    <navigation />
+  <div>
     <router-view v-slot="{ Component }">
       <transition name="fade" mode="out-in">
         <component :is="Component" />
       </transition>
     </router-view>
-    <stats/>
-  </main>
+  </div>
 </template>
 <script>
-import Navigation from "./components/Navigation.vue";
-import Stats from "./components/Stats.vue";
 
 export default {
   components: {
-    Navigation,
-    Stats
   },
 };
 </script>

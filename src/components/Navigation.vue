@@ -25,61 +25,6 @@ export default {
   created() {
     this.routes = this.$router.options.routes;
   },
-  computed: {
-    currentRoute: function () {
-      return this.$router.currentRoute.value.path;
-    },
-    nextEnable: function () {
-      let currentRouteIdx = this.routes.indexOf(
-        this.routes.filter((element) => element.path === this.currentRoute)[0]
-      );
-      if (currentRouteIdx === this.routes.length - 1) {
-        return false;
-      }
-      return true;
-    },
-    prevEnable: function () {
-      let currentRouteIdx = this.routes.indexOf(
-        this.routes.filter((element) => element.path === this.currentRoute)[0]
-      );
-      if (currentRouteIdx === 0) {
-        return false;
-      }
-      return true;
-    },
-  },
-  mounted() {
-    window.addEventListener("keyup", (e) => {
-      if (e.key === "ArrowUp") {
-        this.prev();
-      }
-      if (e.key === "ArrowDown") {
-        this.next();
-      }
-    });
-  },
-  methods: {
-    next() {
-      if (!this.nextEnable) {
-        return;
-      }
-      let currentRouteIdx = this.routes.indexOf(
-          this.routes.filter((element) => element.path === this.currentRoute)[0]
-        ),
-        nextRoute = this.routes[currentRouteIdx + 1];
-      this.$router.push(nextRoute);
-    },
-    prev() {
-      if (!this.prevEnable) {
-        return;
-      }
-      let currentRouteIdx = this.routes.indexOf(
-        this.routes.filter((element) => element.path === this.currentRoute)[0]
-      );
-      let nextRoute = this.routes[currentRouteIdx - 1];
-      this.$router.push(nextRoute);
-    },
-  },
 };
 </script>
 <style scoped lang="scss">

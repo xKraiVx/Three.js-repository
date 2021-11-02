@@ -1,11 +1,13 @@
 /* eslint-disable */
 <template>
   <div ref="wrapper" class="game">
+    <navigation />
     <transition name="fade">
       <popup v-if="popup.state" :content="popup.content" />
     </transition>
     <div class="distance">{{ distanceCounter }}</div>
     <div class="speed">{{ speedCount.speed }}</div>
+    <stats/>
     <canvas ref="canvas"></canvas>
   </div>
 </template>
@@ -13,6 +15,8 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import Popup from "../components/Popup.vue";
+import Stats from "../components/Stats.vue";
+import Navigation from "../components/Navigation.vue";
 import dataJSON from "../data/data.json";
 
 export default {
@@ -37,7 +41,7 @@ export default {
     cameraPosition: {
       x: -2,
       y: 6,
-      z: 20,
+      z: 10,
     },
     renderer: null,
     quadcopter: {
@@ -593,10 +597,13 @@ export default {
     },
   },
   components: {
+    Stats,
     Popup,
+    Navigation
   },
 };
 </script>
 <style lang="sass">
+@import "../assets/scss/default/colors.scss";
 @import "../assets/scss/pages/game.scss"
 </style>

@@ -5,11 +5,19 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 30px 10px;
-  background: $secondary;
   z-index: 1;
+  &:hover, &:focus{
+    .navigation__wrapper{
+      transform: translateX(0);
+    }
+  }
   &__wrapper{
-    position: relative;
+  background: $secondary;
+  position: relative;
+  padding: 30px 10px;
+  height: 100vh;
+  transition: transform .3s ease;
+  transform: translateX(-100%);
   }
   &__list{
     &-item{
