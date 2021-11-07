@@ -12,7 +12,6 @@ export default {
   }),
   created() {
     this.routes = this.$router.options.routes;
-    console.log( this.routes);
   },
 };
 </script>

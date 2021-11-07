@@ -6,8 +6,8 @@
       <popup v-if="popup.state" :content="popup.content" />
     </transition>
     <div class="distance">{{ distanceCounter }}</div>
-    <div class="speed">{{ speedCount.speed }}</div>
-    <stats/>
+    <div class="speed">{{ speed }}</div>
+    <stats />
     <canvas ref="canvas"></canvas>
   </div>
 </template>
@@ -65,7 +65,7 @@ export default {
       parametrs: {
         size: {
           width: 10,
-          leng: 1000,
+          leng: 300,
           height: 10,
         },
       },
@@ -122,11 +122,11 @@ export default {
     objLoader: null,
     speedCount: {
       maxSpeed: 10,
-      speed: 0,
       speedInterval: null,
       oldTime: 0,
       oldDistance: 0,
     },
+    speed: 0,
   }),
   created() {
     this.oldTime = Date.now();
@@ -200,31 +200,9 @@ export default {
       //Raycaster
 
       //start
-
-      const intersectStart = this.windmillOffice.raycaster.intersectObject(
-        this.quadcopter.mesh
-      );
-
-      if (intersectStart.length) {
-        this.gravity = -9.82;
-        this.world.gravity.set(0, this.gravity, 0);
-        this.state = "start";
-      }
-
+      this.start();
       //finish
-      const intersectFinish = this.customersOffice.raycaster.intersectObject(
-        this.quadcopter.mesh
-      );
-
-      if (intersectFinish.length) {
-        document.removeEventListener("keypress", this.handleKeypress);
-        this.state = "finish";
-        setTimeout(() => {
-          document.addEventListener("keypress", this.handleKeypress);
-          this.popup.content = this.data.popups.finish;
-          this.popup.state = true;
-        }, this.popup.timeout);
-      }
+      this.finish();
 
       //Update physics world
 
@@ -236,7 +214,7 @@ export default {
 
       //Moving of quadcopter
       let currForse = this.velocity;
-      if (this.speedCount.maxSpeed <= this.speedCount.speed) {
+      if (this.speedCount.maxSpeed <= this.speed) {
         currForse = 0;
       }
       this.quadcopter.body.applyLocalForce(
@@ -277,11 +255,11 @@ export default {
           this.walls.objects[this.walls.objects.length - 1].mesh.position.x,
         currentDistance = Number(this.distanceCounter);
 
-      if (currentDistance + 30 > lastObjectX) {
-        const /* heightOfBottomWall = this.walls.parametrs.size.y * Math.random(),
-          offset = 7,
-          heightOfTopWall = 10 - (offset + heightOfBottomWall), */
-          positionX = Math.round(lastObjectX) + 15;
+      if (
+        currentDistance + 30 > lastObjectX &&
+        currentDistance < this.floor.parametrs.size.leng - 60
+      ) {
+        const positionX = Math.round(lastObjectX) + 15;
 
         const updateObjects = this.walls.objects.splice(0, 2);
 
@@ -292,6 +270,11 @@ export default {
         });
 
         console.log(this.walls.objects.length);
+      }
+    },
+    speed: function () {
+      if (this.speed < 0 && this.state === "start") {
+        this.fail();
       }
     },
   },
@@ -509,11 +492,7 @@ export default {
 
       //Raycaster
       this.customersOffice.raycaster = new THREE.Raycaster();
-      const rayOrigin = new THREE.Vector3(
-        endOfWay,
-        this.quadcopter.parametrs.positionY,
-        0
-      );
+      const rayOrigin = new THREE.Vector3(endOfWay, 0, 0);
       const rayDiraction = new THREE.Vector3(1, 1, 0);
       rayDiraction.normalize();
 
@@ -591,19 +570,54 @@ export default {
     speedCounter() {
       this.speedCount.speedInterval = setInterval(() => {
         const currDistance = this.camera.position.x.toFixed();
-        this.speedCount.speed = currDistance - this.speedCount.oldDistance;
+        this.speed = currDistance - this.speedCount.oldDistance;
         this.speedCount.oldDistance = currDistance;
       }, 1000);
+    },
+    start() {
+      const intersectStart = this.windmillOffice.raycaster.intersectObject(
+        this.quadcopter.mesh
+      );
+
+      if (intersectStart.length) {
+        this.gravity = -9.82;
+        this.world.gravity.set(0, this.gravity, 0);
+        this.state = "start";
+      }
+    },
+    finish() {
+      const intersectFinish = this.customersOffice.raycaster.intersectObject(
+        this.quadcopter.mesh
+      );
+
+      if (intersectFinish.length) {
+        document.removeEventListener("keypress", this.handleKeypress);
+        this.state = "finish";
+        setTimeout(() => {
+          document.addEventListener("keypress", this.handleKeypress);
+          this.popup.content = this.data.popups.finish;
+          this.popup.state = true;
+        }, this.popup.timeout);
+      }
+    },
+    fail() {
+      document.removeEventListener("keypress", this.handleKeypress);
+      this.state = "fail";
+      setTimeout(() => {
+        document.addEventListener("keypress", this.handleKeypress);
+        this.popup.content = this.data.popups.fail;
+        this.popup.state = true;
+      }, this.popup.timeout);
     },
   },
   components: {
     Stats,
     Popup,
-    Navigation
+    Navigation,
   },
 };
 </script>
 <style lang="sass">
-@import "../assets/scss/default/colors.scss";
+@import "../assets/scss/default/colors.scss"
 @import "../assets/scss/pages/game.scss"
 </style>
