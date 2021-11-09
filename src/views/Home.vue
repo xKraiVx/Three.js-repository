@@ -1,4 +1,3 @@
-/* eslint-disable vue/no-parsing-error */
 <template>
   <main class="home">
     <h1>Fluppy bird on THREE.js and CANNON.js</h1>
@@ -16,6 +15,6 @@ export default {
 };
 </script>
 <style lang="sass" scoped>
-@import "../assets/scss/default/colors.scss";
+@import "../assets/scss/default/colors.scss"
 @import "../assets/scss/pages/home.scss"
 </style>

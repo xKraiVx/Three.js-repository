@@ -189,6 +189,7 @@ export default {
       if (!this.camera) {
         return 0;
       }
+
       return this.camera.position.x.toFixed();
     },
   },
