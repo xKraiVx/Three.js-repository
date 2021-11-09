@@ -19,4 +19,3 @@ export default {
 @import "../assets/scss/default/colors.scss";
 @import "../assets/scss/pages/home.scss"
 </style>
-

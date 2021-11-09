@@ -1,14 +1,13 @@
 <template>
-  <div id="stats">{{fps}} fps
-  </div>
+  <div id="stats">{{ fps }} fps</div>
 </template>
 
 <script>
 export default {
-  name: 'Stats',
+  name: "Stats",
   data() {
     return {
-      fps: 0
+      fps: 0,
     };
   },
   methods: {
@@ -16,7 +15,7 @@ export default {
       this.frames++;
       let time = (performance || Date).now();
       if (time >= this.prevTime + 1000) {
-        let fps = this.frames * 1000 / (time - this.prevTime);
+        let fps = (this.frames * 1000) / (time - this.prevTime);
         this.prevTime = time;
         this.frames = 0;
         this.fps = fps.toFixed(0);
@@ -31,7 +30,7 @@ export default {
       this._frameId = window.requestAnimationFrame(() => {
         this.loop();
       });
-    }
+    },
   },
   mounted() {
     this.beginTime = this.prevTime = (performance || Date).now();
@@ -40,7 +39,7 @@ export default {
   },
   beforeDestoryed() {
     window.cancelAnimationFrame(this._frameId);
-  }
+  },
 };
 </script>
 

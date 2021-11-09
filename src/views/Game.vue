@@ -1,9 +1,12 @@
-/* eslint-disable */
 <template>
   <div ref="wrapper" class="game">
     <navigation />
     <transition name="fade">
-      <popup v-if="popup.state" :content="popup.content" />
+      <popup
+        v-if="popup.state"
+        :content="popup.content"
+        :is-mobile="isTouchDevice"
+      />
     </transition>
     <div class="distance">{{ distanceCounter }}</div>
     <div class="speed">{{ speed }}</div>
@@ -13,6 +16,8 @@
 </template>
 <script>
 import * as THREE from "three";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import * as CANNON from "cannon-es";
 import Popup from "../components/Popup.vue";
 import Stats from "../components/Stats.vue";
@@ -21,7 +26,13 @@ import dataJSON from "../data/data.json";
 
 export default {
   data: () => ({
+    isTouchDevice: false,
+    publicPath: process.env.BASE_URL,
     data: dataJSON,
+    fog: {
+      color: "#ffffff",
+      distance: 35,
+    },
     popup: {
       state: false,
       content: null,
@@ -41,11 +52,17 @@ export default {
     cameraPosition: {
       x: -2,
       y: 6,
-      z: 10,
+      z: 15,
     },
+    directionalLight: null,
+    ambientLight: null,
     renderer: null,
     quadcopter: {
-      model: null,
+      model: {
+        body: null,
+        leftRotor: null,
+        rightRotor: null,
+      },
       mesh: null,
       body: null,
       parametrs: {
@@ -53,7 +70,7 @@ export default {
         size: {
           width: 1,
           height: 0.5,
-          depth: 1,
+          depth: 4,
         },
         metalness: 0.4,
         roughness: 0.4,
@@ -77,27 +94,53 @@ export default {
     windmillOffice: {
       mesh: null,
       raycaster: null,
-      parametrs: {
-        size: {
-          width: 12,
-          height: 10,
-          depth: 10,
+      building: {
+        parametrs: {
+          size: {
+            width: 12,
+            height: 10,
+            depth: 10,
+          },
+          metalness: 0.4,
+          roughness: 0.4,
         },
-        metalness: 0.4,
-        roughness: 0.4,
+      },
+      trapDoor: {
+        parametrs: {
+          size: {
+            radiusTop: 3,
+            radiusBottom: 3,
+            height: 0.5,
+            sectors: 64,
+          },
+          metalness: 0.4,
+          roughness: 0.4,
+        },
       },
     },
     customersOffice: {
       mesh: null,
       raycaster: null,
-      parametrs: {
-        size: {
-          width: 12,
-          height: 10,
-          depth: 10,
+      building: {
+        parametrs: {
+          size: {
+            width: 12,
+            height: 10,
+            depth: 10,
+          },
+          metalness: 0.4,
+          roughness: 0.4,
         },
-        metalness: 0.4,
-        roughness: 0.4,
+      },
+      animatedPlain: {
+        parametrs: {
+          size: {
+            height: 10,
+            width: 10,
+          },
+          metalness: 0.4,
+          roughness: 0.4,
+        },
       },
     },
     walls: {
@@ -129,113 +172,17 @@ export default {
     speed: 0,
   }),
   created() {
+    this.isTouchDevice = this.isMobile();
     this.oldTime = Date.now();
 
     this.data = dataJSON;
     //Popup
     this.popup.content = this.data.popups.start;
     this.popup.state = true;
+    console.log(this.isTouchDevice);
   },
   mounted() {
-    /**
-     * Base
-     */
-
-    //Canvas
-    const canvas = this.$refs.canvas;
-    //Sizes
-    this.wrapperSizes.width = this.$refs.wrapper.clientWidth;
-    this.wrapperSizes.height = this.$refs.wrapper.clientHeight;
-    //Scene
-    const scene = new THREE.Scene();
-    this.scene = scene;
-
-    this.createCamera();
-
-    this.createLight();
-
-    this.createWorld();
-
-    this.createFloor(this.floor.parametrs.size);
-
-    this.createCeiling(this.floor.parametrs.size);
-
-    this.createQuadrocopter(
-      this.quadcopter.parametrs.size,
-      this.quadcopter.parametrs.positionY
-    );
-
-    this.createWindmillOffice();
-
-    this.createCustomersOffice();
-
-    //save to objects to update
-
-    /* Renderer */
-    this.renderer = new THREE.WebGLRenderer({
-      canvas: canvas,
-    });
-
-    this.renderer.setSize(this.wrapperSizes.width, this.wrapperSizes.height);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    window.addEventListener("resize", this.resizeUpdate);
-
-    //Keypress event
-    document.addEventListener("keypress", this.handleKeypress);
-
-    this.clock = new THREE.Clock();
-
-    this.createWallStack(
-      this.walls.optimization.step,
-      this.walls.optimization.wallsDistance
-    );
-
-    this.speedCounter();
-
-    const tick = () => {
-      const elapsedTime = this.clock.getElapsedTime();
-      const deltaTime = elapsedTime - this.oldElapsedTime;
-      this.oldElapsedTime = elapsedTime;
-
-      //Raycaster
-
-      //start
-      this.start();
-      //finish
-      this.finish();
-
-      //Update physics world
-
-      this.world.step(1 / 60, deltaTime, 3);
-      for (const object of this.objectsToUpdate) {
-        object.mesh.position.copy(object.body.position);
-        object.mesh.quaternion.copy(object.body.quaternion);
-      }
-
-      //Moving of quadcopter
-      let currForse = this.velocity;
-      if (this.speedCount.maxSpeed <= this.speed) {
-        currForse = 0;
-      }
-      this.quadcopter.body.applyLocalForce(
-        new CANNON.Vec3(currForse, 0, 0),
-        new CANNON.Vec3(0, 0, 0)
-      );
-
-      if (this.state !== "finish") {
-        this.camera.position.x = this.quadcopter.body.position.x;
-      }
-      // Render
-      this.renderer.render(scene, this.camera);
-
-      // Call tick again on the next frame
-      window.requestAnimationFrame(tick);
-    };
-    tick();
-  },
-  beforeUnmount() {
-    window.removeEventListener("resize", this.resizeUpdate);
-    document.removeEventListener("keypress", this.handleKeypress);
+    this.init();
   },
   computed: {
     distanceCounter() {
@@ -247,7 +194,7 @@ export default {
   },
   watch: {
     distanceCounter: function () {
-      if (!this.walls.objects) {
+      if (this.walls.objects.length === 0) {
         return;
       }
 
@@ -268,21 +215,156 @@ export default {
           object.body.position.x = positionX;
           this.walls.objects.push(object);
         });
-
-        console.log(this.walls.objects.length);
-      }
-    },
-    speed: function () {
-      if (this.speed < 0 && this.state === "start") {
-        this.fail();
       }
     },
   },
   methods: {
+    isMobile() {
+      return "ontouchstart" in window;
+    },
+    init() {
+      /**
+       * Base
+       */
+      //Canvas
+      const canvas = this.$refs.canvas;
+      //Sizes
+      this.wrapperSizes.width = this.$refs.wrapper.clientWidth;
+      this.wrapperSizes.height = this.$refs.wrapper.clientHeight;
+      //Scene
+      const scene = new THREE.Scene();
+      this.scene = scene;
+
+      this.createCamera();
+
+      this.createLight();
+
+      this.createWorld();
+
+      this.createFloor(this.floor.parametrs.size);
+
+      this.createCeiling(this.floor.parametrs.size);
+
+      this.createQuadrocopter(
+        this.quadcopter.parametrs.size,
+        this.quadcopter.parametrs.positionY
+      );
+
+      this.createWindmillOffice();
+
+      this.createFog();
+
+      //save to objects to update
+
+      /* Renderer */
+      this.renderer = new THREE.WebGLRenderer({
+        canvas: canvas,
+      });
+      this.renderer.setSize(this.wrapperSizes.width, this.wrapperSizes.height);
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      this.renderer.setClearColor(this.fog.color);
+
+      this.createCustomersOffice();
+
+      window.addEventListener("resize", this.resizeUpdate);
+
+      //Keypress event
+      document.addEventListener("keypress", this.handleKeypress);
+      document.addEventListener("touchstart", this.hangleTap);
+
+      this.clock = new THREE.Clock();
+
+      this.createWallStack(
+        this.walls.optimization.step,
+        this.walls.optimization.wallsDistance
+      );
+
+      this.speedCounter();
+      const tick = () => {
+        const elapsedTime = this.clock.getElapsedTime();
+        const deltaTime = elapsedTime - this.oldElapsedTime;
+        this.oldElapsedTime = elapsedTime;
+
+        //Raycaster
+
+        //start
+        this.start();
+        //finish
+        this.finish();
+
+        //Moving of TrapDoor
+        const trapDoor = this.windmillOffice.mesh.children[1];
+        if (this.distanceCounter > 3 && trapDoor.rotation.z < 3.14) {
+          trapDoor.rotation.z += (Math.PI * deltaTime) / 3;
+          trapDoor.position.x += deltaTime / 0.5;
+          trapDoor.position.z += deltaTime * 1.5;
+        }
+
+        //Update physics world
+
+        this.world.step(1 / 60, deltaTime);
+        if (this.quadcopter.model.body) {
+          const body = this.quadcopter.body,
+            rightRotor = this.quadcopter.model.rightRotor,
+            leftRotor = this.quadcopter.model.leftRotor;
+          this.quadcopter.model.body.position.copy(
+            this.quadcopter.body.position
+          );
+          this.quadcopter.model.body.quaternion.copy(
+            this.quadcopter.body.quaternion
+          );
+
+          if (this.state !== "fail") {
+            rightRotor.position.x = body.position.x;
+            rightRotor.position.y = body.position.y;
+            rightRotor.rotation.y += Math.PI * deltaTime;
+
+            leftRotor.position.x = body.position.x;
+            leftRotor.position.y = body.position.y;
+            leftRotor.rotation.y += Math.PI * deltaTime;
+          } else {
+            rightRotor.position.x = body.position.x;
+            rightRotor.position.y = body.position.y;
+            rightRotor.quaternion.copy(body.quaternion);
+
+            leftRotor.position.x = body.position.x;
+            leftRotor.position.y = body.position.y;
+            leftRotor.quaternion.copy(body.quaternion);
+          }
+        }
+
+        this.quadcopter.mesh.position.copy(this.quadcopter.body.position);
+        this.quadcopter.mesh.quaternion.copy(this.quadcopter.body.quaternion);
+
+        //Moving of quadcopter
+        let currForse = this.velocity;
+        if (this.speedCount.maxSpeed <= this.speed) {
+          currForse = 0;
+        }
+        this.quadcopter.body.applyLocalForce(
+          new CANNON.Vec3(currForse, 0, 0),
+          new CANNON.Vec3(0, 0, 0)
+        );
+
+        if (this.state !== "finish") {
+          this.camera.position.x = this.quadcopter.body.position.x;
+        }
+        // Render
+        this.renderer.render(scene, this.camera);
+
+        // Call tick again on the next frame
+        window.requestAnimationFrame(tick);
+      };
+      tick();
+    },
     handleKeypress(e) {
       if (e.code === "Space") {
         if (this.popup.state) {
           this.popup.state = false;
+        }
+        if (this.state === "finish" || this.state === "fail") {
+          this.restart();
+          return;
         }
         if (this.state === "beforeInit") {
           this.velocity = 1;
@@ -293,6 +375,24 @@ export default {
             new CANNON.Vec3(0, 0, 0)
           );
         }
+      }
+    },
+    hangleTap() {
+      if (this.popup.state) {
+        this.popup.state = false;
+      }
+      if (this.state === "finish" || this.state === "fail") {
+        this.restart();
+        return;
+      }
+      if (this.state === "beforeInit") {
+        this.velocity = 1;
+        this.state = "init";
+      } else if (this.state === "start") {
+        this.quadcopter.body.applyLocalImpulse(
+          new CANNON.Vec3(0, 5, 0),
+          new CANNON.Vec3(0, 0, 0)
+        );
       }
     },
     createCamera() {
@@ -309,20 +409,13 @@ export default {
     },
     createLight() {
       //Ambient light
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-      this.scene.add(ambientLight);
+      this.ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+      this.scene.add(this.ambientLight);
 
       //Directional light
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.3);
-      directionalLight.castShadow = true;
-      directionalLight.shadow.mapSize.set(1024, 1024);
-      directionalLight.shadow.camera.far = 15;
-      directionalLight.shadow.camera.left = -7;
-      directionalLight.shadow.camera.top = 7;
-      directionalLight.shadow.camera.right = 7;
-      directionalLight.shadow.camera.bottom = -7;
-      directionalLight.position.set(-1, 3, 5);
-      this.scene.add(directionalLight);
+      this.directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      this.directionalLight.position.set(-3, 10, 3);
+      this.scene.add(this.directionalLight);
     },
     createWorld() {
       this.world = new CANNON.World();
@@ -404,17 +497,74 @@ export default {
       this.world.addBody(this.floor.body);
     },
     createQuadrocopter(size, positionY) {
+      //Model
+      const OBJFile = `${this.publicPath}dron/dron_1/Drone_obj.obj`,
+        MTLFile = `${this.publicPath}dron/dron_1/Drone_obj.mtl`,
+        colorDroneTexture = `${this.publicPath}dron/dron_1/textures/Flying drone_col.jpg`,
+        aoDroneTexture = `${this.publicPath}dron/dron_1/textures/Flying drone_Ao_2.jpg`,
+        normalDroneTexture = `${this.publicPath}dron/dron_1/textures/Flying drone_Nor_2.jpg`;
+
+      const textureLoader = new THREE.TextureLoader(),
+        colorTexture = textureLoader.load(colorDroneTexture),
+        aoTexture = textureLoader.load(aoDroneTexture),
+        normalTexture = textureLoader.load(normalDroneTexture);
+
+      new MTLLoader().load(MTLFile, (materials) => {
+        materials.preload();
+        new OBJLoader().setMaterials(materials).load(OBJFile, (object) => {
+          object.rotation.y = Math.PI / 2;
+          object.scale.set(4, 4, 4);
+
+          object.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              child.material.map = colorTexture;
+              child.material.normalMap = normalTexture;
+              child.material.aoMap = aoTexture;
+            }
+          });
+          const dronBody = new THREE.Group();
+          const dronRightRotor = new THREE.Group();
+          const dronLeftRotor = new THREE.Group();
+
+          const leftRotor = object.children.splice(2, 1)[0];
+          leftRotor.scale.set(4, 4, 4);
+          dronLeftRotor.add(leftRotor);
+          this.quadcopter.model.leftRotor = dronLeftRotor;
+          this.quadcopter.model.leftRotor.position.z = -1;
+          this.quadcopter.model.leftRotor.children[0].position.x = -1;
+
+          const rightRotor = object.children.splice(3, 1)[0];
+          rightRotor.scale.set(4, 4, 4);
+          dronRightRotor.add(rightRotor);
+          this.quadcopter.model.rightRotor = dronRightRotor;
+
+          this.quadcopter.model.rightRotor.position.z = 1;
+          this.quadcopter.model.rightRotor.children[0].position.x = 1;
+
+          dronBody.add(object);
+          this.quadcopter.model.body = dronBody;
+
+          this.scene.add(this.quadcopter.model.rightRotor);
+          this.scene.add(this.quadcopter.model.leftRotor);
+          this.scene.add(this.quadcopter.model.body);
+        });
+      });
+
       //Mesh
       const geometry = new THREE.BoxBufferGeometry(
         size.width,
         size.height,
         size.depth
       );
-      const material = new THREE.MeshStandardMaterial({
+      /* const material = new THREE.MeshStandardMaterial({
         color: "#777777",
         metalness: this.quadcopter.parametrs.metalness,
         roughness: this.quadcopter.parametrs.roughness,
+      }); */
+      const material = new THREE.MeshLambertMaterial({
+        transparent: true,
       });
+      material.opacity = 0;
 
       this.quadcopter.mesh = new THREE.Mesh(geometry, material);
       this.quadcopter.mesh.position.y = positionY;
@@ -433,36 +583,87 @@ export default {
       this.quadcopter.body.position.copy(this.quadcopter.mesh.position);
       this.world.addBody(this.quadcopter.body);
 
-      //Add to objects to update
-      const quadcopterMesh = this.quadcopter.mesh;
-      const quadcopterBody = this.quadcopter.body;
-      this.objectsToUpdate.push({
-        mesh: quadcopterMesh,
-        body: quadcopterBody,
-      });
+      this.quadcopter.body.addEventListener(
+        "collide",
+        () => {
+          if (this.state === "start") {
+            this.fail();
+          }
+        },
+        { once: true }
+      );
     },
     createWindmillOffice() {
-      const width = this.windmillOffice.parametrs.size.width + 30,
-        height = this.windmillOffice.parametrs.size.height,
-        depth = this.windmillOffice.parametrs.size.depth;
+      const group = new THREE.Group(),
+        textureLoader = new THREE.TextureLoader();
 
-      //Mesh
-      const geometry = new THREE.BoxBufferGeometry(width, height, depth);
-      const material = new THREE.MeshStandardMaterial({
+      const colorTrapDoorTexturePath = `${this.publicPath}textures/columns_textures/metal_plate_4k.blend/textures/metal_plate_diff_4k.jpg`,
+        normalTrapDoorTexturePath = `${this.publicPath}textures/columns_textures/metal_plate_4k.blend/textures/metal_plate_nor_gl_4k.jpg`,
+        roughnessTrapDoorTexturePath = `${this.publicPath}textures/columns_textures/metal_plate_4k.blend/textures/metal_plate_rough_4k.jpg`,
+        metalnessTrapDoorTexturePath = `${this.publicPath}textures/columns_textures/metal_plate_4k.blend/textures/metal_plate_metal_4k.jpg`,
+        aoTrapDoorTexturePath = `${this.publicPath}textures/columns_textures/metal_plate_4k.blend/textures/metal_plate_ao_4k.jpg`;
+
+      //Building
+      const buildingWidth =
+          this.windmillOffice.building.parametrs.size.width + 30,
+        buildingHeight = this.windmillOffice.building.parametrs.size.height,
+        buildingDepth = this.windmillOffice.building.parametrs.size.depth;
+      const buildingGeometry = new THREE.BoxBufferGeometry(
+        buildingWidth,
+        buildingHeight,
+        buildingDepth
+      );
+      const buildingMaterial = new THREE.MeshStandardMaterial({
         color: "#777777",
-        metalness: this.windmillOffice.parametrs.metalness,
-        roughness: this.windmillOffice.parametrs.roughness,
+        metalness: this.windmillOffice.building.parametrs.metalness,
+        roughness: this.windmillOffice.building.parametrs.roughness,
       });
+      group.add(new THREE.Mesh(buildingGeometry, buildingMaterial));
 
-      this.windmillOffice.mesh = new THREE.Mesh(geometry, material);
-      this.windmillOffice.mesh.position.y = height / 2;
+      //TrapDoor
+      const colorTrapDoorTexture = textureLoader.load(colorTrapDoorTexturePath),
+        normalTrapDoorTexture = textureLoader.load(normalTrapDoorTexturePath),
+        roughnessTrapDoor = textureLoader.load(roughnessTrapDoorTexturePath),
+        metalnessTrapDoorTexture = textureLoader.load(
+          metalnessTrapDoorTexturePath
+        ),
+        aoTrapDoorTexture = textureLoader.load(aoTrapDoorTexturePath);
+
+      const trapDoorRadiusTop =
+          this.windmillOffice.trapDoor.parametrs.size.radiusTop,
+        trapDoorRadiusBottom =
+          this.windmillOffice.trapDoor.parametrs.size.radiusBottom,
+        trapDoorRadiusHeight =
+          this.windmillOffice.trapDoor.parametrs.size.height,
+        trapDoorSectors = this.windmillOffice.trapDoor.parametrs.size.sectors;
+      const trapDoorGeometry = new THREE.CylinderGeometry(
+        trapDoorRadiusTop,
+        trapDoorRadiusBottom,
+        trapDoorRadiusHeight,
+        trapDoorSectors
+      );
+      const trapDoorMaterial = new THREE.MeshStandardMaterial({
+        map: colorTrapDoorTexture,
+        normalMap: normalTrapDoorTexture,
+        roughnessMap: roughnessTrapDoor,
+        metalnessMap: metalnessTrapDoorTexture,
+        aoMap: aoTrapDoorTexture,
+      });
+      const trapDoorMesh = new THREE.Mesh(trapDoorGeometry, trapDoorMaterial);
+      trapDoorMesh.position.x = buildingWidth / 2;
+      trapDoorMesh.rotation.x = Math.PI / 2;
+      trapDoorMesh.rotation.z = Math.PI / 2;
+      group.add(trapDoorMesh);
+
+      this.windmillOffice.mesh = group;
+      this.windmillOffice.mesh.position.y = buildingHeight / 2;
       this.windmillOffice.mesh.position.x = -15;
       this.scene.add(this.windmillOffice.mesh);
 
       //Raycaster
       this.windmillOffice.raycaster = new THREE.Raycaster();
       const rayOrigin = new THREE.Vector3(
-        this.windmillOffice.parametrs.size.width / 2 + 1,
+        this.windmillOffice.building.parametrs.size.width / 2 + 1,
         this.quadcopter.parametrs.positionY,
         0
       );
@@ -472,31 +673,82 @@ export default {
       this.windmillOffice.raycaster.set(rayOrigin, rayDiraction);
     },
     createCustomersOffice() {
-      const width = this.customersOffice.parametrs.size.width + 30,
-        height = this.customersOffice.parametrs.size.height,
-        depth = this.customersOffice.parametrs.size.depth,
-        endOfWay = this.floor.parametrs.size.leng;
+      const group = new THREE.Group();
 
-      //Mesh
+      //Building
+      const width = this.customersOffice.building.parametrs.size.width + 30,
+        height = this.customersOffice.building.parametrs.size.height,
+        depth = this.customersOffice.building.parametrs.size.depth,
+        endOfWay = this.floor.parametrs.size.leng;
       const geometry = new THREE.BoxBufferGeometry(width, height, depth);
       const material = new THREE.MeshStandardMaterial({
         color: "#777777",
-        metalness: this.customersOffice.parametrs.metalness,
-        roughness: this.customersOffice.parametrs.roughness,
+        metalness: this.customersOffice.building.parametrs.metalness,
+        roughness: this.customersOffice.building.parametrs.roughness,
       });
+      group.add(new THREE.Mesh(geometry, material));
 
-      this.customersOffice.mesh = new THREE.Mesh(geometry, material);
+      //Animated plane
+      const planeWidth =
+          this.customersOffice.animatedPlain.parametrs.size.width,
+        planeHeight = this.customersOffice.animatedPlain.parametrs.size.height;
+      const planeGeometry = new THREE.PlaneBufferGeometry(
+        planeWidth,
+        planeHeight,
+        32,
+        32
+      );
+      const planeMaterial = new THREE.MeshStandardMaterial({
+        color: "#777777",
+        metalness: this.customersOffice.building.parametrs.metalness,
+        roughness: this.customersOffice.building.parametrs.roughness,
+      });
+      const animatedPlain = new THREE.Mesh(planeGeometry, planeMaterial);
+      animatedPlain.position.x = -width / 2 + 0.1;
+      animatedPlain.rotation.y = -Math.PI / 2;
+      group.add(animatedPlain);
+
+      this.customersOffice.mesh = group;
       this.customersOffice.mesh.position.y = height / 2;
       this.customersOffice.mesh.position.x = endOfWay + 15;
       this.scene.add(this.customersOffice.mesh);
 
+      //Animate
+      /* const animate = () => {
+        console.log("animate");
+        if (
+          this.distance + 30 < this.floor.parametrs.size.leng &&
+          this.state !== "start"
+        ) {
+          return;
+        }
+        const now = Date.now() / 300;
+        const animatedPlain = this.customersOffice.mesh.children[1];
+        const animatedPlainPartialsCount =
+          animatedPlain.geometry.attributes.position.count;
+
+        for (let i = 0; i < animatedPlainPartialsCount; i++) {
+          const x = animatedPlain.geometry.attributes.position.getX(i);
+          const y = animatedPlain.geometry.attributes.position.getY(i);
+          const xsin = Math.sin(x + now) / 2;
+          const ycos = Math.cos(y + now) / 2;
+          this.customersOffice.mesh.children[1].geometry.attributes.position.setZ(
+            i,
+            xsin + ycos
+          );
+        }
+        this.customersOffice.mesh.children[1].geometry.attributes.position.needsUpdate = true;
+        requestAnimationFrame(animate);
+      };
+      animate(); */
+
       //Raycaster
-      this.customersOffice.raycaster = new THREE.Raycaster();
+      this.customersOffice.building.raycaster = new THREE.Raycaster();
       const rayOrigin = new THREE.Vector3(endOfWay, 0, 0);
       const rayDiraction = new THREE.Vector3(1, 1, 0);
       rayDiraction.normalize();
 
-      this.customersOffice.raycaster.set(rayOrigin, rayDiraction);
+      this.customersOffice.building.raycaster.set(rayOrigin, rayDiraction);
     },
     createWall(size, position) {
       //Mesh
@@ -523,6 +775,10 @@ export default {
       body.position.copy(position);
       this.world.addBody(body);
       this.walls.objects.push({ mesh, body });
+    },
+    createFog() {
+      const fog = new THREE.Fog(this.fog.color, 1, this.fog.distance);
+      this.scene.fog = fog;
     },
     removePhysicalObject(mesh, body) {
       this.world.removeBody(body);
@@ -586,34 +842,66 @@ export default {
       }
     },
     finish() {
-      const intersectFinish = this.customersOffice.raycaster.intersectObject(
-        this.quadcopter.mesh
-      );
+      const intersectFinish =
+        this.customersOffice.building.raycaster.intersectObject(
+          this.quadcopter.mesh
+        );
 
       if (intersectFinish.length) {
-        document.removeEventListener("keypress", this.handleKeypress);
         this.state = "finish";
         setTimeout(() => {
-          document.addEventListener("keypress", this.handleKeypress);
           this.popup.content = this.data.popups.finish;
           this.popup.state = true;
         }, this.popup.timeout);
       }
     },
     fail() {
-      document.removeEventListener("keypress", this.handleKeypress);
       this.state = "fail";
+      document.removeEventListener("touchstart", this.hangleTap);
+      document.removeEventListener("keypress", this.handleKeypress);
       setTimeout(() => {
+        document.addEventListener("touchstart", this.hangleTap);
         document.addEventListener("keypress", this.handleKeypress);
         this.popup.content = this.data.popups.fail;
         this.popup.state = true;
       }, this.popup.timeout);
+    },
+    restart() {
+      this.$router.replace({ name: "Home", force: true });
+    },
+    destroy() {
+      window.removeEventListener("resize", this.resizeUpdate);
+      document.removeEventListener("keypress", this.handleKeypress);
+      document.removeEventListener("touchstart", this.hangleTap);
+
+      this.world.removeBody(this.floor.body);
+      this.scene.remove(this.floor.mesh);
+      this.world.removeBody(this.ceiling.body);
+      this.scene.remove(this.ceiling.mesh);
+      this.world.removeBody(this.quadcopter.body);
+      this.scene.remove(this.quadcopter.mesh);
+      for (const obj of this.walls.objects) {
+        this.scene.remove(obj.mesh);
+        this.world.removeBody(obj.body);
+      }
+
+      this.scene.remove(this.windmillOffice.mesh);
+      this.scene.remove(this.customersOffice.mesh);
+      this.scene.remove(this.camera);
+      this.scene.remove(this.directionalLight);
+      this.scene.remove(this.ambientLight);
+      this.scene.remove(this.quadcopter.model.body);
+      this.scene.remove(this.quadcopter.model.rightRotor);
+      this.scene.remove(this.quadcopter.model.leftRotor);
     },
   },
   components: {
     Stats,
     Popup,
     Navigation,
+  },
+  beforeUnmount() {
+    this.destroy();
   },
 };
 </script>
